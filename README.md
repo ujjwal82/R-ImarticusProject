@@ -7,7 +7,8 @@ output: html_document
 # Set working directory
 
 ```{r, eval=TRUE}
-setwd("D:/ujjwal/Tutorial/DataScience/Imarticus/Group Projects/R/Work")
+setwd("D:/ujjwal/Tutorial/DataScience/Imarticus/Group Projects/R-ImarticusProject")
+
 ```
 
 
@@ -21,7 +22,7 @@ library(caret)
 library(dplyr)
 ```
 
-# Import other source codes (will be required to do some operations)
+## Import other source codes (will be required to do some operations)
 
 ```{r, eval=TRUE}
 source("cleanData.R")

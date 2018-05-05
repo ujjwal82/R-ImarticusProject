@@ -6,7 +6,8 @@ output: html_document
 # Set working directory
 
 ```{r, eval=TRUE}
-setwd("D:/ujjwal/Tutorial/DataScience/Imarticus/Group Projects/R/Work")
+setwd("D:/ujjwal/Tutorial/DataScience/Imarticus/Group Projects/R-ImarticusProject")
+
 ```
 
 
