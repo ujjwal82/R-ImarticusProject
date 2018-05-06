@@ -23,20 +23,18 @@ library(dplyr)
 
 ## Import other source codes (will be required to do some operations)
 
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 source("cleanData.R")
 ```
 
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 # Assign the data file name here.
 
-DataFileName <- 'data\\Group Project on R-Data Set-4.csv'
-# DataFileName <- 'data\\Gropup Project for R-Data Set.csv'
+# DataFileName <- 'data\\Group Project on R-Data Set-4.csv'
+DataFileName <- 'data\\Gropup Project for R-Data Set.csv'
 
 raw_data <- read.csv(DataFileName, stringsAsFactors = TRUE)
-```
 
-```{r, eval=TRUE}
 # Make a copy of raw data 
 dataset <- raw_data
 
@@ -55,6 +53,7 @@ names(Filter(is.factor, dataset))
 ## Find out how many NA's we need to deal with
 ```{r, eval=TRUE}
 sumNA <- sum(is.na(dataset))
+print (sumNA)
 
 ```
 

@@ -48,20 +48,22 @@ head(dataset)
 summary(dataset)
 ```
 
-### Let's list down all factors in the dataset
+## Let's list down all factors in the dataset
+```{r, eval=TRUE}
 names(Filter(is.factor, dataset))
+```
 
-### List down all factors in the dataset
-names(Filter(is.numeric, dataset))
-
-### Find out how many NA's we need to deal with
+## Find out how many NA's we need to deal with
+```{r, eval=TRUE}
 sumNA <- sum(is.na(dataset))
-
-### Now we need to find which column has this single NA value
+print (sumNA)
 
 ```
+
+## Now we need to find which column has this single NA value
+
+```{r, eval=TRUE}
 if(sumNA > 1){
   processNA(dataset)
 }
 ```
-
