@@ -7,66 +7,241 @@ setwd("D:/ujjwal/Tutorial/DataScience/Imarticus/Group Projects/R-ImarticusProjec
 # install.packages("dplyr")
 # install.packages('caret')
 # install.packages('doSNOW')
-# install.packages('snow')
-library(caret)
-library(dplyr)
-library(mice)
-library(snow)
-library(doSNOW)
+# install.packages('h2o')
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(gmodels))
+suppressMessages(library(h2o))
+
+suppressMessages(library(doSNOW))
+
+suppressMessages(library(randomForest))
+suppressMessages(library(gbm))
+suppressMessages(library(corrplot))
+suppressMessages(library(knitr))
+suppressMessages(library(glmnet))
+
 
 source("cleanData.R")
 
 # Assign the data file name here.
 
-DataFileName <- 'data\\Group Project on R-Data Set-4.csv'
-# DataFileName <- 'data\\Gropup Project for R-Data Set.csv'
+TrainDataFileName <- 'data\\Group Project on R-Data Set-4.csv'
+# TrainDataFileName <- 'data\\Gropup Project for R-Data Set.csv'
 
-raw_data <- read.csv(DataFileName, stringsAsFactors = TRUE)
+TestFileName <- 'data\\Group Project on R-Data Set-3.csv'
+
+raw_traindata <- read.csv(TrainDataFileName, stringsAsFactors = TRUE)
+raw_testdata <- read.csv(TestFileName, stringsAsFactors = TRUE)
+
+
+
+train = raw_traindata %>% 
+  mutate(datset = "train")
+test = raw_testdata %>%
+  mutate(SalePrice = mean(train$SalePrice), 
+         datset = "test")
 
 # Make a copy of raw data 
-dataset <- raw_data
+dataset <- train %>%
+  rbind(., test)
 
 # Let's see the data, how it looks
-head(dataset)
+#head(dataset)
 
 # Summary of dataset will give us the picture how data is distributed.
-summary(dataset)
+#summary(dataset)
 
 # List down all factors in the dataset
 # names(Filter(is.numeric, dataset))
 
 ###
 # Step - Data cleaning
-# Handle missing values
 ###
-dataset <- processNA(dataset, 0.4)
 
-# Confirm wheather all missing values are removed
-md.pattern(dataset)
+# Drop columns with more than 40% of missing values
+dataset <- dropNAcols(dataset, 0.4)
 
-# Let's list down all factors in the dataset
-# names(Filter(is.factor, dataset))
 
-split<-createDataPartition(y = dataset$SalePrice, 
+# Find out how many NA's we need to deal with
+sumNA <- sum(is.na(dataset))
+print(paste('Pre ==> Number of missing values in dataset : ', sumNA))
+print(paste('Pre ==> Dimensions of the dataset : ', dim(dataset)[1], '(rows) ', dim(dataset)[2], '(columns)'))
+
+###
+# for all the categorical variables, create new level 'NA' 
+# for missing values.
+# And then convert into integer values.
+###
+for( colName in names(Filter(is.factor, dataset))){
+  print(paste('Processing column : ', colName))
+
+  dataset[, colName] <- fct_explicit_na(dataset[, colName], 'NA')
+  # dataset[, colName] <- as.numeric(factor(dataset[, colName],
+  #                         levels = levels(dataset[, colName])))
+}
+
+# Find out how many NA's we need to deal with
+sumNA <- sum(is.na(dataset))
+print(paste('Pre ==> Number of missing values in dataset : ', sumNA))
+print(paste('Pre ==> Dimensions of the dataset : ', dim(dataset)[1], '(rows) ', dim(dataset)[2], '(columns)'))
+
+
+colstokeep <- colMeans(is.na(dataset))
+
+for( colName in names(colstokeep[colstokeep > 0])){
+  print(paste('Processing column : ', colName))
+  
+  dataset[, colName] <- ifelse(is.na(dataset[, colName]), 0, dataset[, colName])
+}
+
+# Find out how many NA's we need to deal with
+sumNA <- sum(is.na(dataset))
+print(paste('Pre ==> Number of missing values in dataset : ', sumNA))
+print(paste('Pre ==> Dimensions of the dataset : ', dim(dataset)[1], '(rows) ', dim(dataset)[2], '(columns)'))
+
+plot(x = dataset$SalePrice, type = "o")
+hist(dataset$SalePrice)
+
+
+
+# Let's separate out the train and test data, since we are done with the cleanup activities.
+
+train <- dataset %>%
+  filter(datset == "train") %>%
+  select(-datset)
+
+test <- dataset %>%
+  filter(datset == "test") %>%
+  select(-datset, -SalePrice)
+
+
+colnames(train)
+ggplot(train, aes(HouseStyle, fill=GarageType))+
+  geom_bar()
+
+
+## Cross table is used to compare two categorical variables in dataset.
+CrossTable(train$HouseStyle, train$GarageType)
+
+
+split<-createDataPartition(y = train$SalePrice, 
                            # times = 1, 
-                           p = 0.85,
+                           p = 0.9,
                            list = FALSE)
-dataset.train <- dataset[ split, ]
-dataset.validate <- dataset[ -split, ]
+dataset.train <- train[ split, ]
+dataset.validate <- train[ -split, ]
 
-# Examin the proportions of the split on SalePrice was done in similar fashion
-# prop.table(table(dataset$SalePrice))
-# prop.table(table(dataset.train$SalePrice))
-# prop.table(table(dataset.validate$SalePrice))
+summary(dataset.train$RoofMatl)
+
+
+
+# initialize the H2O
+localh2o <- h2o.init(nthreads = -1)
+
+# Data to h2o cluster
+train.h2o <- as.h2o(dataset.train)
+test.h2o <- as.h2o(dataset.validate)
+
+colnames(train.h2o)
+
+# dependent variable
+y.dep <- 76
+
+# independent variables( dropping ID and dependent variable )
+x.indep <- c(2:75)
+
+
+###
+# Let's start multiple regression models.
+###
+
+# H2O: glm
+regression.model <- h2o.glm( y = y.dep, x = x.indep, 
+                             training_frame = train.h2o, 
+                             nfolds = 3,
+                             family = "gaussian")
+
+h2o.performance(regression.model)
+
+predict.glm <- as.data.frame(h2o.predict(regression.model, test.h2o))
+sub_reg <- data.frame(Actuals = dataset.validate$SalePrice, 
+                      'GLM' = predict.glm$predict)
+
+# H2O: random forest
+system.time(
+  rforest.model <- h2o.randomForest(y = y.dep, x = x.indep, 
+                                    training_frame = train.h2o,
+                                    ntrees = 1000, mtries = 3, nfolds = 3,
+                                    max_depth = 4, seed =  12345)
+)
+h2o.performance(rforest.model)
+
+predict.rforest <- as.data.frame(h2o.predict(rforest.model, test.h2o))
+sub_reg <- cbind(sub_reg, 'RFOREST' = predict.rforest$predict)
+
+# H2O: GBM
+system.time(
+gbm.model <- h2o.gbm(y = y.dep, x = x.indep, 
+                     training_frame = train.h2o,
+                     ntrees = 1000, max_depth = 4, nfolds = 3,
+                     learn_rate = 0.01, seed =  12345)
+)
+
+h2o.performance(gbm.model)
+
+predict.gbm <- as.data.frame(h2o.predict(gbm.model, test.h2o))
+sub_reg <- cbind(sub_reg, 'GBM' = predict.gbm$predict)
+
+
+# H2O: Deep learning
+system.time(
+  dlearning.model <- h2o.deeplearning(
+    y = y.dep, x = x.indep,
+    training_frame = train.h2o,
+    epoch = 60,
+    hidden = c(100, 100),
+    activation =  'Rectifier',
+    nfolds = 3,
+    seed = 12345
+  )
+)
+
+
+h2o.performance(dlearning.model)
+predict.dlearning <- as.data.frame(h2o.predict(dlearning.model, test.h2o))
+sub_reg <- cbind(sub_reg, 'GBM' = dlearning.model$predict)
+
+
+h2o.performance(regression.model)
+h2o.performance(rforest.model)
+h2o.performance(gbm.model)
+h2o.performance(dlearning.model)
+
+
+
+
+# Check the variable importance
+h2o.varimp(regression.model)
+h2o.varimp(rforest.model)
+dlearning.varimp <- h2o.varimp(dlearning.model)
+
+
 
 ###
 # Create linear model
 ###
+lm_model <- lm(formula = SalePrice ~ ., data = dataset.train)
+summary(lm_model)
+
+
 lmFit <- train( SalePrice ~ ., 
                 data = dataset.train, 
                 method ="lm", 
                 na.action = na.pass)
 
+warnings()
 anova(lmFit)
 
 ###
@@ -102,8 +277,6 @@ caret.cv.XGB <- train( SalePrice ~ .,
                        method = "xgbTree",
                        tunGrid = tune.grid,
                        trControl = train.control)
-stopCluster(cl)
-
 caret.cv.RF <- train( Survived ~ .,
                       data = titanic.train,
                       method = "rf",
